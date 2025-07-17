@@ -7,21 +7,47 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      # Checkout code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Ambil seluruh riwayat git untuk pemindaian secrets
 
+      # Setup Node.js
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
 
+      # Install dependencies
       - name: Install Dependencies
         run: npm install
 
+      # Run unit tests
       - name: Run Unit Tests
         run: npm test
 
+      # Run audit to check vulnerable dependencies
       - name: Run NPM Audit (Dependency Scan)
         run: npm audit --audit-level=high
 
+      # Run GitLeaks for secret detection
       - name: GitLeaks Scan (Secrets Detection)
-        uses: zricethezav/gitleaks-action@v1.6.0
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config-path: .gitleaks.toml          # Pastikan file ini ada di root repo
+          fail: true                           # Gagal jika ada secret
+          redact: true                         # Sembunyikan isi secrets
+          verbose: true
+          format: sarif
+          output: results.sarif
+
+      # Upload scan report if scan fails
+      - name: Upload GitLeaks Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: results.sarif
